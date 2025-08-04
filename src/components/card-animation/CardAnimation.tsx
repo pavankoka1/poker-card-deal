@@ -46,13 +46,13 @@ export const CardAnimation: FC = () => {
         suit: 'hearts',
         value: 1, // Ace of Hearts
         cardHeightPixels: 140,
-        dealDuration: 1000,
+        dealDuration: 1500,
         dealFrom: vec3.fromValues(10.0, 2.5, 0),
         dealTo: vec3.fromValues(0.0, 2.5, 0),
         flipDuration: 1500,
         settleDuration: 700,
-        flipElevation: 1.5,
-        flipYPeak: -1,
+        flipElevation: 0.5,
+        flipYPeak: 0.2,
         settleTo: vec3.fromValues(0, -1.8, 0),
     });
 
