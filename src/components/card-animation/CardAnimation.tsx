@@ -2,6 +2,7 @@ import type { FC } from "react";
 import { useEffect, useRef, useState } from "react";
 import { CardRenderer, CardConfig } from "./CardRenderer";
 import { vec3 } from "gl-matrix";
+import { useNavigate } from "react-router-dom";
 
 const Vec3Control: FC<{ label: string, value: vec3, onChange: (newValue: vec3) => void }> = ({ label, value, onChange }) => {
     const handleChange = (axis: 'x' | 'y' | 'z', val: string) => {
@@ -42,18 +43,19 @@ export const CardAnimation: FC = () => {
     const ref = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<CardRenderer | null>(null);
     const [isConfigVisible, setIsConfigVisible] = useState(false);
+    const navigate = useNavigate();
     const [cardConfig, setCardConfig] = useState<CardConfig>({
         suit: 'hearts',
         value: 1, // Ace of Hearts
-        cardHeightPixels: 140,
+        cardHeightPixels: 80,
         dealDuration: 1500,
-        dealFrom: vec3.fromValues(10.0, 2.5, 0),
-        dealTo: vec3.fromValues(0.0, 2.5, 0),
+        dealFrom: vec3.fromValues(10.0, 6, 0),
+        dealTo: vec3.fromValues(0.0, 6, 0),
         flipDuration: 1500,
         settleDuration: 700,
-        flipElevation: 0.5,
-        flipYPeak: 0.2,
-        settleTo: vec3.fromValues(0, -1.8, 0),
+        flipElevation: -2,
+        flipYPeak: -2,
+        settleTo: vec3.fromValues(0, 1, 0),
     });
 
     useEffect(() => {
@@ -118,25 +120,14 @@ export const CardAnimation: FC = () => {
             height: "100vh",
             overflow: "hidden",
             backgroundColor: "#1a1a1a", // Darker background
+            backgroundImage: "url('/images/bg.png')",
+            backgroundSize: 'contain',
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'center',
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
         }}>
-
-            {/* Imaginary Table */}
-            <div style={{
-                width: "80%",
-                height: "80%",
-                border: "2px dashed #444",
-                borderRadius: "20px",
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                position: 'relative',
-            }}>
-                <span style={{ color: '#555', fontSize: '12px' }}>DEALING AREA</span>
-            </div>
-
 
             {/* Fullscreen Canvas */}
             <canvas
@@ -151,8 +142,6 @@ export const CardAnimation: FC = () => {
                     backgroundColor: "transparent",
                 }}
             />
-
-            {/* --- UI CONTROLS --- */}
 
             {/* Top-Right: Toggle Config Button */}
             <button
@@ -175,6 +164,27 @@ export const CardAnimation: FC = () => {
                 {isConfigVisible ? "Hide Config" : "Show Config"}
             </button>
 
+            {/* Top-Left: Go To Workbench */}
+            <button
+                onClick={() => navigate('/card')}
+                style={{
+                    position: "absolute",
+                    top: "20px",
+                    left: "20px",
+                    padding: "10px 15px",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    backgroundColor: "#3ddc97",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    zIndex: 1001,
+                }}
+            >
+                Card Workbench
+            </button>
+
             {/* Bottom-Left: Replay Button */}
             <button
                 onClick={handleReplay}
@@ -195,7 +205,6 @@ export const CardAnimation: FC = () => {
             >
                 Replay Animation
             </button>
-
 
             {/* Config Panel (conditionally rendered) */}
             {isConfigVisible && (
@@ -266,7 +275,6 @@ export const CardAnimation: FC = () => {
                         <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.settleDuration} ms</span>
                     </div>
 
-
                     {/* Flip Elevation Control */}
                     <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
                         <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Flip Lift (Z-Axis)</h3>
@@ -290,7 +298,6 @@ export const CardAnimation: FC = () => {
                         />
                         <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.flipYPeak?.toFixed(1)}</span>
                     </div>
-
 
                     {/* Suit Selection */}
                     <div style={{

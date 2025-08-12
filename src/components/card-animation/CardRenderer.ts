@@ -232,8 +232,8 @@ export class CardRenderer {
         mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
 
         const modelViewMatrix = mat4.create();
-        const cameraDistance = 5.0;
-        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -cameraDistance]);
+        const cameraDistance = 3;
+        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, -1.0, -cameraDistance]);
 
         // --- Card Size Calculation ---
         // Calculate the scale needed to make the card a specific pixel height
