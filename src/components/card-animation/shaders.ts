@@ -1,12 +1,30 @@
 export const VertexShaderSource = `
-    attribute vec2 a_position;
+    attribute vec2 a_position; // -1..1 quad (tessellated)
     uniform mat4 u_mvp_matrix; // Model-View-Projection Matrix
+    uniform float u_halfWidth;  // world units
+    uniform float u_halfHeight; // world units
+    uniform float u_bendRadius; // world units, large -> flatter
+    uniform float u_coneSlope;  // world units per world Y; 0 => cylinder
+    uniform float u_bendSign;   // +1 or -1 to control bend direction
 
     varying vec2 v_uv;
 
     void main() {
-        gl_Position = u_mvp_matrix * vec4(a_position, 0.0, 1.0);
-        v_uv = a_position * 0.5 + 0.5; // Simple UV mapping
+        float x = a_position.x * u_halfWidth;
+        float y = a_position.y * u_halfHeight;
+        float z = 0.0;
+
+        if (u_bendRadius > 0.0) {
+            float localR = max(0.001, u_bendRadius + u_coneSlope * y);
+            float angle = x / localR; // radians
+            float bentX = sin(angle) * localR;
+            float bentZ = u_bendSign * (localR - cos(angle) * localR);
+            x = bentX;
+            z = bentZ;
+        }
+
+        v_uv = a_position * 0.5 + 0.5;
+        gl_Position = u_mvp_matrix * vec4(x, y, z, 1.0);
     }
 `;
 
@@ -15,11 +33,16 @@ export const FragmentShaderSource = `
     precision mediump float;
 
     // --- Uniforms ---
-    uniform sampler2D u_texture;
-    uniform sampler2D u_suitTexture;
-    uniform bool u_isFrontFace; // The key to switching between front and back
+    uniform sampler2D u_texture;      // back texture
+    uniform sampler2D u_suitTexture;  // suit icon texture (kept for compatibility)
+    uniform sampler2D u_frontTexture; // new: front face image (transparent)
+    uniform bool u_isFrontFace;       // switch between front and back
+    uniform bool u_useFrontTexture;   // if true, sample u_frontTexture over white
     uniform float u_cardValue;
     uniform float u_isRedSuit;
+    uniform float u_suitIndex;        // 0=hearts,1=diamonds,2=clubs,3=spades
+    uniform vec2 u_backUVScale;       // scale for back texture uv
+    uniform vec2 u_backUVOffset;      // offset for back texture uv
 
     // --- Varyings ---
     varying vec2 v_uv;
@@ -44,13 +67,6 @@ export const FragmentShaderSource = `
     float draw_K(vec2 p) { float l1=sdSegment(p,vec2(-0.2,0.3),vec2(-0.2,-0.3)); float l2=sdSegment(p,vec2(-0.2,0.0),vec2(0.2,0.0)); return min(l1,l2); }
 
     // --- SDF Selectors ---
-    float getSuitSDF(vec2 uv, float suitVal) {
-        if(suitVal == 0.0) return drawHeart(uv);
-        if(suitVal == 1.0) return drawDiamond(uv);
-        if(suitVal == 2.0) return drawClub(uv);
-        if(suitVal == 3.0) return drawSpade(uv);
-        return 1.0;
-    }
     float getValueSDF(vec2 uv, float value) {
         if(value == 1.0) return draw_A(uv);
         if(value > 1.5 && value < 2.5) return draw_2(uv);
@@ -60,40 +76,46 @@ export const FragmentShaderSource = `
         return 1.0;
     }
 
+    float getSuitSDF(vec2 uv, float suitIndex) {
+        if (suitIndex < 0.5) return drawHeart(uv);
+        if (suitIndex < 1.5) return drawDiamond(uv);
+        if (suitIndex < 2.5) return drawClub(uv);
+        return drawSpade(uv);
+    }
+
     void main() {
-        if (sdBox(v_uv - 0.5, vec2(0.48, 0.48)) - 0.02 > 0.0) discard;
+        // Loosen edge discard threshold slightly to tolerate perspective/bend warping
+        if (sdBox(v_uv - 0.5, vec2(0.485, 0.485)) - 0.02 > 0.0) discard;
 
         if (u_isFrontFace) {
-            vec3 color = vec3(1.0);
-            vec3 engravingColor = u_isRedSuit > 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 0.0);
-            float thickness = 0.06; // Even Bolder text
+            if (u_useFrontTexture) {
+                vec4 tex = texture2D(u_frontTexture, v_uv);
+                vec3 color = mix(vec3(1.0), tex.rgb, tex.a); // composite over white
+                gl_FragColor = vec4(color, 1.0);
+            } else {
+                vec3 color = vec3(1.0);
+                vec3 engravingColor = u_isRedSuit > 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 0.0);
+                float thickness = 0.06;
 
-            // --- Top-Right (Value) & Bottom-Left (Value) ---
-            vec2 valUV_TR = (v_uv - vec2(0.88, 0.18)) * 7.0; // Centered
-            vec2 valUV_BL = (v_uv - vec2(0.12, 0.82)) * 7.0; // Centered
-            // valUV_BL *= -1.0; // Rotation removed to keep text upright
-            float valSDF = min(getValueSDF(valUV_TR, u_cardValue), getValueSDF(valUV_BL, u_cardValue));
-            color = mix(engravingColor, color, smoothstep(0.0, thickness, valSDF));
+                // Value marks
+                vec2 valUV_TR = (v_uv - vec2(0.88, 0.18)) * 7.0;
+                vec2 valUV_BL = (v_uv - vec2(0.12, 0.82)) * 7.0;
+                float valSDF = min(getValueSDF(valUV_TR, u_cardValue), getValueSDF(valUV_BL, u_cardValue));
+                color = mix(engravingColor, color, smoothstep(0.0, thickness, valSDF));
 
-            // --- Top-Left (Suit) & Bottom-Right (Suit) ---
-            vec2 suitUV_TL = (v_uv - vec2(0.12, 0.18)) * 10.0; // Centered
-            vec2 suitUV_BR = (v_uv - vec2(0.88, 0.82)) * 10.0; // Centered
-            // suitUV_BR *= -1.0; // Rotation removed to keep suit upright
-            
-            vec4 suitColor_TL = texture2D(u_suitTexture, suitUV_TL);
-            if (suitUV_TL.x > 0.0 && suitUV_TL.x < 1.0 && suitUV_TL.y > 0.0 && suitUV_TL.y < 1.0) {
-                 if (suitColor_TL.a > 0.5) color = mix(color, suitColor_TL.rgb, suitColor_TL.a);
+                // Suit marks rendered procedurally
+                vec2 suitUV_TL = (v_uv - vec2(0.12, 0.18)) * 2.8; // slightly larger than value
+                vec2 suitUV_BR = (v_uv - vec2(0.88, 0.82)) * 2.8;
+                float suitSDF_TL = getSuitSDF(suitUV_TL, u_suitIndex);
+                float suitSDF_BR = getSuitSDF(suitUV_BR, u_suitIndex);
+                color = mix(engravingColor, color, smoothstep(0.0, thickness, suitSDF_TL));
+                color = mix(engravingColor, color, smoothstep(0.0, thickness, suitSDF_BR));
+
+                gl_FragColor = vec4(color, 1.0);
             }
-
-            vec4 suitColor_BR = texture2D(u_suitTexture, suitUV_BR);
-            if (suitUV_BR.x > 0.0 && suitUV_BR.x < 1.0 && suitUV_BR.y > 0.0 && suitUV_BR.y < 1.0) {
-                 if (suitColor_BR.a > 0.5) color = mix(color, suitColor_BR.rgb, suitColor_BR.a);
-            }
-
-
-            gl_FragColor = vec4(color, 1.0);
         } else {
-            gl_FragColor = texture2D(u_texture, v_uv);
+            vec2 uv = v_uv * u_backUVScale + u_backUVOffset; // cover-fit mapping
+            gl_FragColor = texture2D(u_texture, uv);
         }
     }
-`; 
+`;

@@ -46,16 +46,34 @@ export const CardAnimation: FC = () => {
     const navigate = useNavigate();
     const [cardConfig, setCardConfig] = useState<CardConfig>({
         suit: 'hearts',
-        value: 1, // Ace of Hearts
+        value: 1,
         cardHeightPixels: 80,
-        dealDuration: 1500,
-        dealFrom: vec3.fromValues(10.0, 6, 0),
-        dealTo: vec3.fromValues(0.0, 6, 0),
-        flipDuration: 1500,
+        rotationDegrees: [147, 35, -39],
+
+        // Camera is fixed by renderer for simplicity
+
+        // Swipe using normalized positions
+        swipeDuration: 1000,
+        swipeBendAngleDeg: -60,
+        swipeLiftZ: 0,
+        swipeStartNormX: 0.9,   // top-right
+        swipeStartNormY: 0.09,
+        swipeEndNormX: 0.85,     // center X
+        swipeEndNormY: 0.2,
+
+        // Deal (end in normalized, start = end of swipe)
+        dealDuration: 1200,
+        dealEndNormX: 0.5,
+        dealEndNormY: 0.2,
+        dealEndRotationDegrees: [135, 0, 0],
+
+        // Flip/Settle (settle to bottom center)
+        flipDuration: 1000,
         settleDuration: 700,
-        flipElevation: -2,
-        flipYPeak: -2,
-        settleTo: vec3.fromValues(0, 1, 0),
+        flipElevation: 0.1,
+        flipYPeak: 0.12,
+        settleEndNormX: 0.5,
+        settleEndNormY: 0.76,
     });
 
     useEffect(() => {
@@ -72,26 +90,29 @@ export const CardAnimation: FC = () => {
         rendererRef.current = cardRenderer;
         cardRenderer.start();
 
+        const resizeCanvasToDisplaySize = () => {
+            const displayWidth = Math.floor(canvas.clientWidth);
+            const displayHeight = Math.floor(canvas.clientHeight);
+            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                canvas.width = displayWidth;
+                canvas.height = displayHeight;
+            }
+            cardRenderer.resize({ width: canvas.width, height: canvas.height });
+        };
+
         const handleResize = () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            cardRenderer.resize({
-                width: window.innerWidth,
-                height: window.innerHeight,
-            });
+            resizeCanvasToDisplaySize();
         };
 
         window.addEventListener('resize', handleResize);
-        handleResize(); // Initial size
+        resizeCanvasToDisplaySize();
 
-        // Cleanup
         return () => {
             window.removeEventListener('resize', handleResize);
             cardRenderer.stop();
         };
     }, []);
 
-    // Update card configuration when it changes
     useEffect(() => {
         if (rendererRef.current) {
             rendererRef.current.updateCardConfig(cardConfig);
@@ -119,7 +140,7 @@ export const CardAnimation: FC = () => {
             width: "100vw",
             height: "100vh",
             overflow: "hidden",
-            backgroundColor: "#1a1a1a", // Darker background
+            backgroundColor: "#1a1a1a",
             backgroundImage: "url('/images/bg.png')",
             backgroundSize: 'contain',
             backgroundRepeat: 'no-repeat',
@@ -129,21 +150,21 @@ export const CardAnimation: FC = () => {
             alignItems: "center",
         }}>
 
-            {/* Fullscreen Canvas */}
             <canvas
                 ref={ref}
                 style={{
                     position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: "100vw",
-                    height: "100vh",
+                    bottom: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: "55vw",
+                    height: "50vh",
                     display: "block",
                     backgroundColor: "transparent",
+                    border: "1px solid red",
                 }}
             />
 
-            {/* Top-Right: Toggle Config Button */}
             <button
                 onClick={() => setIsConfigVisible(!isConfigVisible)}
                 style={{
@@ -164,7 +185,6 @@ export const CardAnimation: FC = () => {
                 {isConfigVisible ? "Hide Config" : "Show Config"}
             </button>
 
-            {/* Top-Left: Go To Workbench */}
             <button
                 onClick={() => navigate('/card')}
                 style={{
@@ -185,7 +205,6 @@ export const CardAnimation: FC = () => {
                 Card Workbench
             </button>
 
-            {/* Bottom-Left: Replay Button */}
             <button
                 onClick={handleReplay}
                 style={{
@@ -206,7 +225,6 @@ export const CardAnimation: FC = () => {
                 Replay Animation
             </button>
 
-            {/* Config Panel (conditionally rendered) */}
             {isConfigVisible && (
                 <div style={{
                     position: "absolute",
@@ -224,106 +242,125 @@ export const CardAnimation: FC = () => {
                     overflowY: "auto",
                 }}>
 
-                    {/* Card Height Control */}
+                    {/* Card Height */}
                     <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
                         <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Card Height</h3>
-                        <input
-                            type="range" min="50" max="400" step="10"
-                            value={cardConfig.cardHeightPixels}
-                            onChange={(e) => handleCardChange({ cardHeightPixels: parseInt(e.target.value) })}
-                            style={{ width: "100%" }}
-                        />
+                        <input type="range" min="50" max="400" step="10" value={cardConfig.cardHeightPixels}
+                            onChange={(e) => handleCardChange({ cardHeightPixels: parseInt(e.target.value) })} style={{ width: "100%" }} />
                         <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.cardHeightPixels} px</span>
                     </div>
 
-                    {/* Deal Animation */}
-                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
-                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Deal Animation</h3>
-                        <Vec3Control label="From" value={cardConfig.dealFrom!} onChange={dealFrom => handleCardChange({ dealFrom })} />
-                        <Vec3Control label="To" value={cardConfig.dealTo!} onChange={dealTo => handleCardChange({ dealTo })} />
-                        <input
-                            type="range" min="200" max="2000" step="50"
-                            value={cardConfig.dealDuration}
-                            onChange={(e) => handleCardChange({ dealDuration: parseInt(e.target.value) })}
-                            style={{ width: "100%", marginTop: '10px' }}
-                        />
-                        <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.dealDuration} ms</span>
+                    {/* Orientation (simple tilt) */}
+                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff" }}>
+                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Orientation</h3>
+                        <label style={{ color: "#ccc", fontSize: 12 }}>Tilt X (pitch)</label>
+                        <input type="range" min="-180" max="180" step="1" value={cardConfig.rotationDegrees?.[0] ?? 0}
+                            onChange={(e) => {
+                                const x = parseInt(e.target.value);
+                                const [, y, z] = cardConfig.rotationDegrees ?? [0, 0, 0];
+                                handleCardChange({ rotationDegrees: [x, y, z] });
+                            }} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 12, color: '#ccc' }}>{cardConfig.rotationDegrees?.[0] ?? 0}°</span>
+                        <label style={{ color: "#ccc", fontSize: 12 }}>Tilt Y (yaw)</label>
+                        <input type="range" min="-180" max="180" step="1" value={cardConfig.rotationDegrees?.[1] ?? 0}
+                            onChange={(e) => {
+                                const y = parseInt(e.target.value);
+                                const [x, , z] = cardConfig.rotationDegrees ?? [0, 0, 0];
+                                handleCardChange({ rotationDegrees: [x, y, z] });
+                            }} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 12, color: '#ccc' }}>{cardConfig.rotationDegrees?.[1] ?? 0}°</span>
                     </div>
 
-                    {/* Flip Speed Control */}
+                    {/* Swipe (Normalized) */}
+                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff" }}>
+                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Swipe (normalized)</h3>
+                        <label style={{ color: "#ccc", fontSize: 12 }}>Duration</label>
+                        <input type="range" min="200" max="2000" step="50" value={cardConfig.swipeDuration}
+                            onChange={(e) => handleCardChange({ swipeDuration: parseInt(e.target.value) })} style={{ width: "100%" }} />
+                        <span style={{ fontSize: 12, color: "#ccc" }}>{cardConfig.swipeDuration} ms</span>
+
+                        <div style={{ height: 8 }} />
+                        <label style={{ color: "#ccc", fontSize: 12 }}>Bend Angle (deg)</label>
+                        <input type="range" min="-90" max="90" step="1" value={cardConfig.swipeBendAngleDeg}
+                            onChange={(e) => handleCardChange({ swipeBendAngleDeg: parseInt(e.target.value) })} style={{ width: "100%" }} />
+                        <span style={{ fontSize: 12, color: "#ccc" }}>{cardConfig.swipeBendAngleDeg}°</span>
+
+                        <div style={{ height: 12 }} />
+                        <h4 style={{ margin: 0, color: '#FFD700' }}>Start (X,Y)</h4>
+                        <input type="range" min="0" max="1" step="0.01" value={cardConfig.swipeStartNormX}
+                            onChange={(e) => handleCardChange({ swipeStartNormX: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 12, color: '#ccc' }}>X: {cardConfig.swipeStartNormX?.toFixed(2)}</span>
+                        <input type="range" min="0" max="1" step="0.01" value={cardConfig.swipeStartNormY}
+                            onChange={(e) => handleCardChange({ swipeStartNormY: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 12, color: '#ccc' }}>Y: {cardConfig.swipeStartNormY?.toFixed(2)}</span>
+
+                        <div style={{ height: 12 }} />
+                        <h4 style={{ margin: 0, color: '#FFD700' }}>End (X,Y)</h4>
+                        <input type="range" min="0" max="1" step="0.01" value={cardConfig.swipeEndNormX}
+                            onChange={(e) => handleCardChange({ swipeEndNormX: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 12, color: '#ccc' }}>X: {cardConfig.swipeEndNormX?.toFixed(2)}</span>
+                        <input type="range" min="0" max="1" step="0.01" value={cardConfig.swipeEndNormY}
+                            onChange={(e) => handleCardChange({ swipeEndNormY: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 12, color: '#ccc' }}>Y: {cardConfig.swipeEndNormY?.toFixed(2)}</span>
+                    </div>
+
+                    {/* Deal (Normalized) */}
+                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff" }}>
+                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Deal (normalized)</h3>
+                        <label style={{ color: "#ccc", fontSize: 12 }}>End X</label>
+                        <input type="range" min="0" max="1" step="0.01" value={cardConfig.dealEndNormX ?? 0.5}
+                            onChange={(e) => handleCardChange({ dealEndNormX: parseFloat(e.target.value) })} style={{ width: "100%" }} />
+                        <span style={{ fontSize: 12, color: "#ccc" }}>{cardConfig.dealEndNormX?.toFixed(2)}</span>
+                        <label style={{ color: "#ccc", fontSize: 12 }}>End Y</label>
+                        <input type="range" min="0" max="1" step="0.01" value={cardConfig.dealEndNormY ?? cardConfig.swipeEndNormY ?? 0.5}
+                            onChange={(e) => handleCardChange({ dealEndNormY: parseFloat(e.target.value) })} style={{ width: "100%" }} />
+                        <span style={{ fontSize: 12, color: "#ccc" }}>{(cardConfig.dealEndNormY ?? cardConfig.swipeEndNormY ?? 0.5).toFixed(2)}</span>
+                        <div style={{ height: 8 }} />
+                        <label style={{ color: "#ccc", fontSize: 12 }}>Duration</label>
+                        <input type="range" min="200" max="2000" step="50" value={cardConfig.dealDuration}
+                            onChange={(e) => handleCardChange({ dealDuration: parseInt(e.target.value) })} style={{ width: "100%" }} />
+                        <span style={{ fontSize: 12, color: "#ccc" }}>{cardConfig.dealDuration} ms</span>
+                    </div>
+
+                    {/* Flip / Settle */}
                     <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
-                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Flip Animation</h3>
-                        <input
-                            type="range" min="200" max="2000" step="50"
-                            value={cardConfig.flipDuration}
-                            onChange={(e) => handleCardChange({ flipDuration: parseInt(e.target.value) })}
-                            style={{ width: "100%" }}
-                        />
+                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Flip / Settle</h3>
+                        <label style={{ color: "#ccc", fontSize: 12 }}>Flip Duration</label>
+                        <input type="range" min="200" max="2000" step="50" value={cardConfig.flipDuration}
+                            onChange={(e) => handleCardChange({ flipDuration: parseInt(e.target.value) })} style={{ width: "100%" }} />
                         <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.flipDuration} ms</span>
-                    </div>
-
-                    {/* Settle Speed Control */}
-                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
-                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Settle Animation</h3>
-                        <Vec3Control label="To" value={cardConfig.settleTo!} onChange={settleTo => handleCardChange({ settleTo })} />
-                        <input
-                            type="range" min="200" max="2000" step="50"
-                            value={cardConfig.settleDuration}
-                            onChange={(e) => handleCardChange({ settleDuration: parseInt(e.target.value) })}
-                            style={{ width: "100%", marginTop: '10px' }}
-                        />
+                        <div style={{ height: 8 }} />
+                        <label style={{ color: "#ccc", fontSize: 12 }}>Flip Y Peak</label>
+                        <input type="range" min="0" max="0.5" step="0.01" value={cardConfig.flipYPeak}
+                            onChange={(e) => handleCardChange({ flipYPeak: parseFloat(e.target.value) })} style={{ width: "100%" }} />
+                        <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.flipYPeak?.toFixed(2)}</span>
+                        <div style={{ height: 8 }} />
+                        <label style={{ color: "#ccc", fontSize: 12 }}>Settle Duration</label>
+                        <input type="range" min="200" max="2000" step="50" value={cardConfig.settleDuration}
+                            onChange={(e) => handleCardChange({ settleDuration: parseInt(e.target.value) })} style={{ width: "100%" }} />
                         <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.settleDuration} ms</span>
-                    </div>
-
-                    {/* Flip Elevation Control */}
-                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
-                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Flip Lift (Z-Axis)</h3>
-                        <input
-                            type="range" min="0.1" max="3.0" step="0.1"
-                            value={cardConfig.flipElevation}
-                            onChange={(e) => handleCardChange({ flipElevation: parseFloat(e.target.value) })}
-                            style={{ width: "100%" }}
-                        />
-                        <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.flipElevation?.toFixed(1)}</span>
-                    </div>
-
-                    {/* Flip Arc Control */}
-                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
-                        <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Flip Arc (Y-Axis)</h3>
-                        <input
-                            type="range" min="0.0" max="3.0" step="0.1"
-                            value={cardConfig.flipYPeak}
-                            onChange={(e) => handleCardChange({ flipYPeak: parseFloat(e.target.value) })}
-                            style={{ width: "100%" }}
-                        />
-                        <span style={{ fontSize: "12px", color: "#ccc" }}>{cardConfig.flipYPeak?.toFixed(1)}</span>
+                        <div style={{ height: 8 }} />
+                        <h4 style={{ margin: 0, color: '#FFD700' }}>Settle To (normalized)</h4>
+                        <input type="range" min="0" max="1" step="0.01" value={cardConfig.settleEndNormX ?? 0.5}
+                            onChange={(e) => handleCardChange({ settleEndNormX: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 12, color: '#ccc' }}>X: {cardConfig.settleEndNormX?.toFixed(2) ?? '0.50'}</span>
+                        <input type="range" min="0" max="1" step="0.01" value={cardConfig.settleEndNormY ?? 1.0}
+                            onChange={(e) => handleCardChange({ settleEndNormY: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 12, color: '#ccc' }}>Y: {cardConfig.settleEndNormY?.toFixed(2) ?? '1.00'}</span>
                     </div>
 
                     {/* Suit Selection */}
-                    <div style={{
-                        backgroundColor: "#333",
-                        padding: "15px",
-                        borderRadius: "8px",
-                        color: "#fff",
-                    }}>
+                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
                         <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Suit</h3>
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                             {suits.map((suit) => (
-                                <button
-                                    key={suit}
-                                    onClick={() => handleCardChange({ suit })}
+                                <button key={suit} onClick={() => handleCardChange({ suit })}
                                     style={{
-                                        padding: "8px 12px",
-                                        fontSize: "12px",
-                                        fontWeight: "bold",
+                                        padding: "8px 12px", fontSize: "12px", fontWeight: "bold",
                                         backgroundColor: cardConfig.suit === suit ? "#FFB018" : "#555",
                                         color: cardConfig.suit === suit ? "#000" : "#fff",
-                                        border: "none",
-                                        borderRadius: "6px",
-                                        cursor: "pointer",
-                                        transition: "all 0.3s ease",
-                                    }}
-                                >
+                                        border: "none", borderRadius: "6px", cursor: "pointer", transition: "all 0.3s ease"
+                                    }}>
                                     {suit === 'hearts' && '♥'}
                                     {suit === 'diamonds' && '♦'}
                                     {suit === 'clubs' && '♣'}
@@ -334,31 +371,18 @@ export const CardAnimation: FC = () => {
                     </div>
 
                     {/* Value Selection */}
-                    <div style={{
-                        backgroundColor: "#333",
-                        padding: "15px",
-                        borderRadius: "8px",
-                        color: "#fff",
-                    }}>
+                    <div style={{ backgroundColor: "#333", padding: "15px", borderRadius: "8px", color: "#fff", }}>
                         <h3 style={{ margin: "0 0 10px 0", color: "#FFB018" }}>Value</h3>
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", maxWidth: "300px" }}>
                             {values.map((value) => (
-                                <button
-                                    key={value}
-                                    onClick={() => handleCardChange({ value })}
+                                <button key={value} onClick={() => handleCardChange({ value })}
                                     style={{
-                                        padding: "6px 10px",
-                                        fontSize: "11px",
-                                        fontWeight: "bold",
+                                        padding: "6px 10px", fontSize: "11px", fontWeight: "bold",
                                         backgroundColor: cardConfig.value === value ? "#FFB018" : "#555",
                                         color: cardConfig.value === value ? "#000" : "#fff",
-                                        border: "none",
-                                        borderRadius: "4px",
-                                        cursor: "pointer",
-                                        transition: "all 0.3s ease",
+                                        border: "none", borderRadius: "4px", cursor: "pointer", transition: "all 0.3s ease",
                                         minWidth: "30px",
-                                    }}
-                                >
+                                    }}>
                                     {value === 1 && 'A'}
                                     {value === 11 && 'J'}
                                     {value === 12 && 'Q'}
