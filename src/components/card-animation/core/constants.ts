@@ -13,11 +13,11 @@ export const PLAYER_PADDING_RIGHT_PX = 40;
 export const PLAYER_GAP_X_PX = 12;
 export const PLAYER_OFFSET_BOTTOM_PX = 28;
 export const PLAYER_LIFT_Y_PER_STEP_PX = 24;
-export const STACK_OVERLAP_RATIO = 0.8; // 80% covered
+export const STACK_OVERLAP_RATIO = 0.8; // 80% covered; next card reveals 20%
 export const PLAYER_TILT_Z_PER_STEP_DEG = 6; // roll per step from center
 
 // Dealing setup
-export const INITIAL_CARD_COUNT = 28;
+export const INITIAL_CARD_COUNT = 21;
 export const INITIAL_STACK_OFFSET_RIGHT_PX = 50;
 export const INITIAL_STACK_OFFSET_TOP_PX = 50;
 export const INITIAL_STACK_DELTA_X_PX = 1; // small stagger so they're next to each other

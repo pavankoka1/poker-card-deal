@@ -60,11 +60,11 @@ export interface CardConfig {
 
 // --- Easing Helpers ---
 function easeOutQuint(t: number) { return 1 - Math.pow(1 - t, 5); }
-function easeInQuint(t: number) { return t * t * t * t * t; }
+// function easeInQuint(t: number) { return t * t * t * t * t; }
 function easeInOutQuint(t: number) { return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2; }
 function easeInOutCubic(t: number) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
-function easeInOutSine(t: number) { return -(Math.cos(Math.PI * t) - 1) / 2; }
-function easeInOutPow(t: number, p: number) { const a = Math.max(0.000001, p); return t < 0.5 ? Math.pow(2 * t, a) / 2 : 1 - Math.pow(2 * (1 - t), a) / 2; }
+// function easeInOutSine(t: number) { return -(Math.cos(Math.PI * t) - 1) / 2; }
+// function easeInOutPow(t: number, p: number) { const a = Math.max(0.000001, p); return t < 0.5 ? Math.pow(2 * t, a) / 2 : 1 - Math.pow(2 * (1 - t), a) / 2; }
 
 // Linear interpolation for vectors
 function lerp(out: vec3, a: vec3, b: vec3, t: number) {
@@ -187,7 +187,7 @@ export class CardRenderer {
     private init() {
         const positionAttributeLocation = this.gl.getAttribLocation(this.program, "a_position");
         this.mvpMatrixUniformLocation = this.gl.getUniformLocation(this.program, "u_mvp_matrix");
-        this.textureUniformLocation = this.gl.getUniformLocation(this.program, "u_texture");
+        this.textureUniformLocation = this.gl.getUniformLocation(this.program, "u_backTexture");
         this.cardValueUniformLocation = this.gl.getUniformLocation(this.program, "u_cardValue");
         this.isRedSuitUniformLocation = this.gl.getUniformLocation(this.program, "u_isRedSuit");
         this.isFrontFaceUniformLocation = this.gl.getUniformLocation(this.program, "u_isFrontFace");
@@ -566,7 +566,6 @@ export class CardRenderer {
         // Front face
         this.gl.cullFace(this.gl.BACK);
         this.gl.uniform1i(this.isFrontFaceUniformLocation, 1);
-        if (this.useFrontTextureUniformLocation) this.gl.uniform1i(this.useFrontTextureUniformLocation, 1);
         if (this.frontTextureUniformLocation) {
             this.gl.activeTexture(this.gl.TEXTURE2);
             this.gl.bindTexture(this.gl.TEXTURE_2D, this.frontTexture);

@@ -1,14 +1,14 @@
-import { useMemo } from 'react';
-import { CardsWrapper, CardInitConfig, TransitionSpec } from '../components/card-animation';
-import { CANVAS_WIDTH_PX, CANVAS_HEIGHT_PX, INITIAL_CARD_COUNT, INITIAL_STACK_OFFSET_RIGHT_PX, INITIAL_STACK_OFFSET_TOP_PX, INITIAL_STACK_DELTA_X_PX, INITIAL_ROTATION_DEGREES, DEAL_DELAY_PER_CARD_MS, STACK_OVERLAP_RATIO, MOVE_TO_CENTER_DURATION_MS, FLIP_PART_DURATION_MS, DEAL_DURATION_MS, FLIP_Y_PEAK_PX, CANVAS_SCALE, PLAYER_TILT_Z_PER_STEP_DEG } from '../components/card-animation/core/constants';
+import { useEffect, useMemo, useState } from 'react';
+import { CardsWrapper, CardInitConfig } from '../components/card-animation';
+import { CANVAS_WIDTH_PX, CANVAS_HEIGHT_PX, INITIAL_CARD_COUNT, INITIAL_STACK_OFFSET_RIGHT_PX, INITIAL_STACK_OFFSET_TOP_PX, INITIAL_STACK_DELTA_X_PX, STACK_OVERLAP_RATIO, CANVAS_SCALE, DEAL_DURATION_MS, MOVE_TO_CENTER_DURATION_MS, FLIP_PART_DURATION_MS, FLIP_Y_PEAK_PX, INITIAL_ROTATION_DEGREES } from '../components/card-animation/core/constants';
 import { computePlayerLayoutRects } from '../components/card-animation/core/utils';
 
 export const MultiCardDemo = () => {
 
     // Canvas config
-    const canvasPx = { width: CANVAS_WIDTH_PX, height: CANVAS_HEIGHT_PX } as const;
+    const canvasPx = useMemo(() => ({ width: CANVAS_WIDTH_PX, height: CANVAS_HEIGHT_PX } as const), []);
     // Player rectangles and centers in pixel space via utils
-    const { rects: playerRectsPx, centers: centersPx, card: cardPx } = useMemo(() => computePlayerLayoutRects(canvasPx), [canvasPx.width, canvasPx.height]);
+    const { rects: playerRectsPx, centers: centersPx, card: cardPx } = useMemo(() => computePlayerLayoutRects(canvasPx), [canvasPx]);
 
     // Convert pixel centers to world using the fixed canvas size
     const centersWorld = useMemo(() => {
@@ -17,7 +17,7 @@ export const MultiCardDemo = () => {
         return centersPx.map((c) => ({ x: (c.x / w - 0.5) * (w / h) * (2 * Math.tan((45 * Math.PI / 180) / 2) * 3), y: -((c.y / h - 0.5) * (2 * Math.tan((45 * Math.PI / 180) / 2) * 3)) }));
     }, [centersPx, canvasPx.width, canvasPx.height]);
 
-    // Generate 14 cards stacked at top-right with slight x staggers
+    // Generate cards stacked at top-right with slight x staggers; no initial transitions
     const initialCards: CardInitConfig[] = useMemo(() => {
         const cards: CardInitConfig[] = [];
         for (let i = 0; i < INITIAL_CARD_COUNT; i++) {
@@ -32,61 +32,62 @@ export const MultiCardDemo = () => {
             const wx = (xPx / canvasPx.width - 0.5) * (canvasPx.width / canvasPx.height) * worldFactor;
             const wy = -((yPx / canvasPx.height - 0.5) * worldFactor);
 
-            const toWorldX = (px: number) => (px / canvasPx.width - 0.5) * (canvasPx.width / canvasPx.height) * worldFactor;
-            const toWorldY = (py: number) => -((py / canvasPx.height - 0.5) * worldFactor);
+            // helpers retained if needed later
 
-            const wait: TransitionSpec = { duration: i * DEAL_DELAY_PER_CARD_MS };
-            const moveToCenter: TransitionSpec = {
-                duration: MOVE_TO_CENTER_DURATION_MS,
-                x: toWorldX(canvasPx.width / 2),
-                y: wy,
-                rotateX: 135,
-                rotateY: 0,
-                rotateZ: 0,
-            };
-            const flipUp: TransitionSpec = {
-                duration: FLIP_PART_DURATION_MS,
-                y: toWorldY((canvasPx.height / 2) - FLIP_Y_PEAK_PX),
-                rotateX: 315,
-            };
-            // Merge tilt into deal transition itself
-            const tiltSteps = Math.abs(((i % 7) + 1) - 4);
-            const tiltZ = tiltSteps * PLAYER_TILT_Z_PER_STEP_DEG * ((((i % 7) + 1) < 4) ? 1 : -1);
-            const dealToSlot: TransitionSpec = {
-                duration: DEAL_DURATION_MS,
-                dealToPlayer: ((i % 7) + 1),
-                rotateZ: tiltZ,
-            };
+            const playerIndex = (i % centersWorld.length) + 1; // 1..N
+            const centerXPx = Math.round(canvasPx.width / 2);
             cards.push({
                 id,
                 suit,
                 value,
                 x: wx,
                 y: wy,
+                // Face the camera more for initial stacked visibility
                 rotateX: INITIAL_ROTATION_DEGREES[0],
                 rotateY: INITIAL_ROTATION_DEGREES[1],
                 rotateZ: INITIAL_ROTATION_DEGREES[2],
                 cardHeightPixels: Math.round(cardPx.height),
-                transitions: [wait, moveToCenter, flipUp, dealToSlot],
+                transitions: [
+                    // Make them immediately visible by applying a no-op transition
+                    { duration: 1 },
+                    // Stagger: wait i * 1000ms before starting motion
+                    { duration: i * 1000, bendAngleDeg: -90 },
+                    // Move horizontally to canvas center (keep Y)
+                    { duration: MOVE_TO_CENTER_DURATION_MS, xPx: centerXPx, yPx: yPx, bendAngleDeg: 0 },
+                    // Flip part 1: lift up and rotate half
+                    { duration: FLIP_PART_DURATION_MS, rotateX: 135, rotateY: 0, rotateZ: 0, yPx: yPx },
+                    // Flip part 2: come down and finish rotation
+                    { duration: FLIP_PART_DURATION_MS, rotateX: 135 + 180, yPx: yPx },
+                    // Then move to assigned player slot
+                    { duration: DEAL_DURATION_MS, dealToPlayer: playerIndex }
+                ],
             });
         }
         console.log(cards)
         return cards;
-    }, [cardPx.height, canvasPx.width, canvasPx.height]);
+    }, [cardPx.height, canvasPx.width, canvasPx.height, centersWorld.length]);
 
+    // Stagger using rAF-based delay per card via child gates
+    const [visibleCards, setVisibleCards] = useState<CardInitConfig[]>(initialCards);
+    useEffect(() => { setVisibleCards(initialCards); }, [initialCards]);
+
+    const scaledW = Math.round(canvasPx.width * CANVAS_SCALE);
+    const scaledH = Math.round(canvasPx.height * CANVAS_SCALE);
     return (
         <div style={{ position: 'fixed', inset: 0, background: "#1a1a1a url('/images/bg.png') center/contain no-repeat" }}>
-            <div style={{ position: 'absolute', left: '50%', bottom: 0, width: `${canvasPx.width}px`, height: `${canvasPx.height}px`, transform: `translateX(-50%) scale(${CANVAS_SCALE})`, transformOrigin: 'bottom center' }}>
+            <div style={{ position: 'absolute', left: '50%', bottom: 0, width: `${scaledW}px`, height: `${scaledH}px`, transform: `translateX(-50%)`, transformOrigin: 'bottom center' }}>
                 <CardsWrapper
-                    cards={initialCards}
+                    cards={visibleCards}
                     playerSlotsWorld={centersWorld}
                     stackOverlapRatio={STACK_OVERLAP_RATIO}
                     debugPlayerBounds={playerRectsPx}
                     style={{ width: '100%', height: '100%' }}
-                    scale={CANVAS_SCALE}
                 />
+                {/* No gates; all cards present as a stack initially */}
             </div>
         </div>
     );
 };
+
+// Gates removed for initial stacked layout
 

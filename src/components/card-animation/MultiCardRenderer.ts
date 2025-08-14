@@ -1,5 +1,5 @@
 import { mat4 } from "gl-matrix";
-import { DEFAULT_CARD_ASPECT_WH, CARD_HEIGHT_PX, CARD_WIDTH_PX } from "./core/constants";
+import { CARD_HEIGHT_PX } from "./core/constants";
 import { FragmentShaderSource, VertexShaderSource } from "./shaders";
 
 export type EasingFunction = (t: number) => number;
@@ -78,7 +78,7 @@ type InternalCardState = {
 
 // Easing helpers
 const linear: EasingFunction = (t) => t;
-const easeInOutCubic: EasingFunction = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+// const easeInOutCubic: EasingFunction = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 export class MultiCardRenderer {
     private gl: WebGLRenderingContext;
@@ -108,6 +108,7 @@ export class MultiCardRenderer {
     private backUVScaleUniformLocation: WebGLUniformLocation | null = null;
     private backUVOffsetUniformLocation: WebGLUniformLocation | null = null;
     private cornerRadiusUniformLocation: WebGLUniformLocation | null = null;
+    private debugLogged: Set<string> = new Set();
 
     // Textures
     private backTexture: WebGLTexture | null = null;
@@ -232,7 +233,7 @@ export class MultiCardRenderer {
     private init() {
         const positionAttributeLocation = this.gl.getAttribLocation(this.program, "a_position");
         this.mvpMatrixUniformLocation = this.gl.getUniformLocation(this.program, "u_mvp_matrix");
-        // Match BendCardRenderer fragment uniforms
+        // Match CardRenderer fragment uniforms
         this.textureUniformLocation = this.gl.getUniformLocation(this.program, "u_backTexture");
         this.cardValueUniformLocation = this.gl.getUniformLocation(this.program, "u_cardValue");
         this.isRedSuitUniformLocation = this.gl.getUniformLocation(this.program, "u_isRedSuit");
@@ -243,12 +244,12 @@ export class MultiCardRenderer {
         this.coneSlopeUniformLocation = this.gl.getUniformLocation(this.program, "u_coneSlope");
         this.bendSignUniformLocation = this.gl.getUniformLocation(this.program, "u_bendSign");
         this.suitIndexUniformLocation = this.gl.getUniformLocation(this.program, "u_suitIndex");
-        this.useFrontTextureUniformLocation = null;
-        this.frontTextureUniformLocation = this.gl.getUniformLocation(this.program, "u_suitTexture");
-        this.frontUVScaleUniformLocation = null;
+        this.useFrontTextureUniformLocation = this.gl.getUniformLocation(this.program, "u_useFrontTexture");
+        this.frontTextureUniformLocation = this.gl.getUniformLocation(this.program, "u_frontTexture");
+        this.frontUVScaleUniformLocation = null; // not used by shader currently
         this.frontUVOffsetUniformLocation = null;
-        this.backUVScaleUniformLocation = null;
-        this.backUVOffsetUniformLocation = null;
+        this.backUVScaleUniformLocation = this.gl.getUniformLocation(this.program, "u_backUVScale");
+        this.backUVOffsetUniformLocation = this.gl.getUniformLocation(this.program, "u_backUVOffset");
         this.cornerRadiusUniformLocation = null;
 
         // Tessellated quad
@@ -275,15 +276,18 @@ export class MultiCardRenderer {
         this.gl.enableVertexAttribArray(positionAttributeLocation);
         this.gl.vertexAttribPointer(positionAttributeLocation, 2, this.gl.FLOAT, false, 0, 0);
 
-        // Textures: align with BendCardRenderer (back image + suit glyph)
-        this.backTexture = this.loadImageTexture('/images/card-back.jpg');
-        this.frontTexture = this.loadImageTexture('images/queen-heart.avif');
+        // Textures: align handling with CardRenderer
+        this.backTexture = this.loadBackTexture('/images/card-back.jpg');
+        this.frontTexture = this.loadImageTexture('/images/queen-hearts.avif');
 
-        // GL state
+        // GL state (mirror CardRenderer)
         this.gl.useProgram(this.program);
         this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        // Match CardRenderer GL state for consistent visuals
         this.gl.enable(this.gl.DEPTH_TEST);
+        this.gl.depthFunc(this.gl.LEQUAL);
         this.gl.enable(this.gl.CULL_FACE);
+        this.gl.cullFace(this.gl.BACK);
         this.gl.enable(this.gl.BLEND);
         this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
     }
@@ -332,8 +336,6 @@ export class MultiCardRenderer {
             }
             // Improve magnification quality
             this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
-            // Add optional LOD bias to reduce blurriness when minifying
-            const extLODBias = (this.gl as any).EXT_texture_filter_anisotropic;
         };
         image.src = url;
         return texture;
@@ -358,29 +360,26 @@ export class MultiCardRenderer {
                 off.width = potW; off.height = potH;
                 const ctx = off.getContext('2d');
                 if (ctx) {
-                    // Disable canvas interpolation for sharper resample
-                    (ctx as any).imageSmoothingEnabled = false;
+                    (ctx as any).imageSmoothingEnabled = true;
                     (ctx as any).imageSmoothingQuality = 'high';
                     ctx.drawImage(image, 0, 0, potW, potH);
                     source = off;
                 }
             }
             this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, source);
-            // Avoid blur: prefer NEAREST for minification when NO_BLUR is true
-            const useNearest = true;
             if (MultiCardRenderer.isPowerOf2(potW) && MultiCardRenderer.isPowerOf2(potH)) {
                 this.gl.generateMipmap(this.gl.TEXTURE_2D);
-                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, useNearest ? this.gl.NEAREST_MIPMAP_NEAREST : this.gl.LINEAR_MIPMAP_LINEAR);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR);
             } else {
                 this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
                 this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
-                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, useNearest ? this.gl.NEAREST : this.gl.LINEAR);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
             }
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, useNearest ? this.gl.NEAREST : this.gl.LINEAR);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
             const ext = this.gl.getExtension('EXT_texture_filter_anisotropic') ||
                 this.gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic') ||
                 this.gl.getExtension('MOZ_EXT_texture_filter_anisotropic');
-            if (ext && !useNearest) {
+            if (ext) {
                 const max = this.gl.getParameter((ext as any).MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 4;
                 this.gl.texParameterf(this.gl.TEXTURE_2D, (ext as any).TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, max));
             }
@@ -408,23 +407,29 @@ export class MultiCardRenderer {
                 off.width = potW; off.height = potH;
                 const ctx = off.getContext('2d');
                 if (ctx) {
-                    (ctx as any).imageSmoothingEnabled = false;
+                    (ctx as any).imageSmoothingEnabled = true;
                     (ctx as any).imageSmoothingQuality = 'high';
                     ctx.drawImage(image, 0, 0, potW, potH);
                     source = off;
                 }
             }
             this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, source);
-            const useNearest = true;
             if (MultiCardRenderer.isPowerOf2(potW) && MultiCardRenderer.isPowerOf2(potH)) {
                 this.gl.generateMipmap(this.gl.TEXTURE_2D);
-                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, useNearest ? this.gl.NEAREST_MIPMAP_NEAREST : this.gl.LINEAR_MIPMAP_LINEAR);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR);
             } else {
                 this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
                 this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
-                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, useNearest ? this.gl.NEAREST : this.gl.LINEAR);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
             }
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, useNearest ? this.gl.NEAREST : this.gl.LINEAR);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+            const ext = this.gl.getExtension('EXT_texture_filter_anisotropic') ||
+                this.gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic') ||
+                this.gl.getExtension('MOZ_EXT_texture_filter_anisotropic');
+            if (ext) {
+                const max = this.gl.getParameter((ext as any).MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 4;
+                this.gl.texParameterf(this.gl.TEXTURE_2D, (ext as any).TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, max));
+            }
         };
         image.src = url;
         return texture;
@@ -455,7 +460,8 @@ export class MultiCardRenderer {
             const center = this.playerCentersWorld[idx - 1];
             // Compute world card height to stack with overlap
             const { worldHeight } = this.computeWorldDimensions();
-            const effectiveCardHeightPx = card.cardHeightPixels;
+            // Use global CARD_HEIGHT_PX to keep height configurable in one place
+            const effectiveCardHeightPx = CARD_HEIGHT_PX;
             const desiredWorldHeight = (effectiveCardHeightPx / this.dimensions.height) * worldHeight;
             const visibleFrac = Math.max(0, Math.min(1, 1 - this.stackOverlapRatio));
             const perCardYOffset = desiredWorldHeight * visibleFrac;
@@ -463,6 +469,20 @@ export class MultiCardRenderer {
             const stackedY = center.y + perCardYOffset * count;
             // Force z to 0 so cards lie on the same plane when stacked
             resolved = { ...next, x: center.x, y: stackedY, z: 0 };
+            // Debug log the computed placement
+            try {
+                // eslint-disable-next-line no-console
+                console.log('[DealToPlayer]', {
+                    cardId: card.id,
+                    playerIndex: idx,
+                    stackCountBefore: count,
+                    center,
+                    desiredWorldHeight,
+                    visibleFrac,
+                    perCardYOffset,
+                    target: { x: center.x, y: stackedY, z: 0 }
+                });
+            } catch { }
         }
         card.active = {
             spec: resolved,
@@ -498,6 +518,7 @@ export class MultiCardRenderer {
         // Will compute per card using card aspect
 
         // Draw each card
+        try { console.log('[MultiCardRenderer] draw count', this.cards.size); } catch { }
         this.cards.forEach((card) => {
             // Transition bookkeeping
             if (!card.active && card.queue.length > 0) {
@@ -555,20 +576,26 @@ export class MultiCardRenderer {
             mat4.rotateY(modelMatrix, modelMatrix, (card.rotateY * Math.PI) / 180);
             mat4.rotateZ(modelMatrix, modelMatrix, (card.rotateZ * Math.PI) / 180);
 
-            // Card size in world units: prefer per-card height; else global constants
+            // Card size in world units: use global constants to keep cards small and consistent
             const effectiveCardHeightPx = CARD_HEIGHT_PX;
             const desiredWorldHeight = (effectiveCardHeightPx / this.dimensions.height) * worldHeight;
             const halfHeight = desiredWorldHeight / 2;
-            let halfWidth: number;
-            if (card.cardWidthPixels) {
-                const desiredWorldWidth = (card.cardWidthPixels / this.dimensions.width) * worldWidth;
-                halfWidth = desiredWorldWidth / 2;
-            } else if (CARD_WIDTH_PX) {
-                const desiredWorldWidth = (CARD_WIDTH_PX / this.dimensions.width) * worldWidth;
-                halfWidth = desiredWorldWidth / 2;
-            } else {
-                const aspectWH = card.cardAspectWH ?? DEFAULT_CARD_ASPECT_WH;
-                halfWidth = halfHeight * aspectWH;
+            // Match CardRenderer aspect for best front texture quality
+            const cardAspectRatio = 0.8;
+            const halfWidth = halfHeight * cardAspectRatio;
+
+            if (!this.debugLogged.has(card.id)) {
+                try {
+                    // eslint-disable-next-line no-console
+                    console.log('[CardSize]', {
+                        cardId: card.id,
+                        effectiveCardHeightPx,
+                        desiredWorldHeight,
+                        halfWidth,
+                        halfHeight
+                    });
+                } catch { }
+                this.debugLogged.add(card.id);
             }
 
             // Compute MVP
@@ -596,7 +623,15 @@ export class MultiCardRenderer {
 
             // No UV scale/offset required for Bend-style shader
 
-            // Draw back face
+            // Back texture cover-fit UV mapping to square (match CardRenderer)
+            const A = this.backTextureAspect;
+            let backScaleX = 1.0, backScaleY = 1.0, backOffsetX = 0.0, backOffsetY = 0.0;
+            if (A >= 1.0) { backScaleX = 1.0 / A; backOffsetX = (1.0 - backScaleX) * 0.5; }
+            else { backScaleY = A; backOffsetY = (1.0 - backScaleY) * 0.5; }
+            if (this.backUVScaleUniformLocation) this.gl.uniform2f(this.backUVScaleUniformLocation, backScaleX, backScaleY);
+            if (this.backUVOffsetUniformLocation) this.gl.uniform2f(this.backUVOffsetUniformLocation, backOffsetX, backOffsetY);
+
+            // Draw back face (cull front faces like CardRenderer)
             this.gl.cullFace(this.gl.FRONT);
             this.gl.uniform1i(this.isFrontFaceUniformLocation, 0);
             this.gl.activeTexture(this.gl.TEXTURE0);
@@ -604,7 +639,7 @@ export class MultiCardRenderer {
             this.gl.uniform1i(this.textureUniformLocation, 0);
             this.gl.drawArrays(this.gl.TRIANGLES, 0, this.vertexCount);
 
-            // Draw front face
+            // Draw front face (cull back faces like CardRenderer)
             this.gl.cullFace(this.gl.BACK);
             this.gl.uniform1i(this.isFrontFaceUniformLocation, 1);
             if (this.frontTextureUniformLocation) {
@@ -612,9 +647,6 @@ export class MultiCardRenderer {
                 this.gl.bindTexture(this.gl.TEXTURE_2D, this.frontTexture);
                 this.gl.uniform1i(this.frontTextureUniformLocation, 2);
             }
-            if (this.cardValueUniformLocation) this.gl.uniform1f(this.cardValueUniformLocation, card.value);
-            if (this.isRedSuitUniformLocation) this.gl.uniform1f(this.isRedSuitUniformLocation, this.isRedSuit(card.suit) ? 1.0 : 0.0);
-            if (this.suitIndexUniformLocation) this.gl.uniform1f(this.suitIndexUniformLocation, this.getSuitValue(card.suit));
             this.gl.drawArrays(this.gl.TRIANGLES, 0, this.vertexCount);
         });
 
