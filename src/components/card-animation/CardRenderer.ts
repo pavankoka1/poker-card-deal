@@ -227,7 +227,7 @@ export class CardRenderer {
         this.gl.vertexAttribPointer(positionAttributeLocation, 2, this.gl.FLOAT, false, 0, 0);
 
         // Textures
-        this.imageTexture = this.loadBackTexture('/images/card-back.jpeg');
+        this.imageTexture = this.loadBackTexture('/images/card-back.jpg');
         this.whiteTexture = this.createWhiteTexture();
         this.frontTexture = this.loadImageTexture('/images/ace-hearts.png');
 

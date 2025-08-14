@@ -237,7 +237,7 @@ export class BendCardRenderer {
     gl.enableVertexAttribArray(positionLocation);
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-    this.backTexture = this.loadImageTexture('/playing-card-back.jpg');
+    this.backTexture = this.loadImageTexture('/images/card-back.jpg');
     this.suitTexture = this.loadImageTexture('/heart.webp');
 
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
