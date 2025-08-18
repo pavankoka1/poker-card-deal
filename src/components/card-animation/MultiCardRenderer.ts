@@ -279,7 +279,7 @@ export class MultiCardRenderer {
         // Textures: align handling with CardRenderer
         this.backTexture = this.loadBackTexture('/images/card-back.jpg');
         // this.frontTexture = this.loadImageTexture('/images/queen-hearts.avif');
-        this.frontTexture = this.loadImageTexture('/images/queen-hearts.avif');
+        this.frontTexture = this.loadImageTexture('/images/ace-hearts.png');
 
         // GL state (mirror CardRenderer)
         this.gl.useProgram(this.program);
