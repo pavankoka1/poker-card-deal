@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { MultiCardRenderer, CardInitConfig, TransitionSpec } from "./MultiCardRenderer";
+import { CANVAS_SCALE } from "./core/constants";
 
 export interface CardsWrapperProps {
     cards: CardInitConfig[];
@@ -105,12 +106,12 @@ export const CardsWrapper = forwardRef<CardsWrapperHandle, CardsWrapperProps>(({
     };
 
     return (
-        <div style={containerStyle}>
-            <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', background: 'transparent', border: '1px solid #fff' }} />
-            {debugPlayerBounds?.map((b, i) => (
-                <div key={i} style={{ position: 'absolute', left: b.x, top: b.y, width: b.width, height: b.height, border: '1px dashed rgba(255,255,255,0.6)', pointerEvents: 'none' }} />
-            ))}
-        </div>
+        <>
+            <canvas ref={canvasRef} style={{ position: 'relative', width: '100%', height: '100%', display: 'block', background: 'transparent', border: '1px solid #fff' }} />
+            {/* {debugPlayerBounds?.map((b, i) => (
+                <div key={i} style={{ position: 'absolute', left: b.x * CANVAS_SCALE, top: b.y * CANVAS_SCALE, width: b.width * CANVAS_SCALE, height: b.height * CANVAS_SCALE, border: '1px dashed rgba(255,255,255,0.6)', pointerEvents: 'none' }} />
+            ))} */}
+        </>
     );
 });
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CardsWrapper, CardInitConfig } from '../components/card-animation';
-import { CANVAS_WIDTH_PX, CANVAS_HEIGHT_PX, INITIAL_CARD_COUNT, INITIAL_STACK_OFFSET_RIGHT_PX, INITIAL_STACK_OFFSET_TOP_PX, INITIAL_STACK_DELTA_X_PX, STACK_OVERLAP_RATIO, CANVAS_SCALE, DEAL_DURATION_MS, MOVE_TO_CENTER_DURATION_MS, FLIP_PART_DURATION_MS, FLIP_Y_PEAK_PX, INITIAL_ROTATION_DEGREES } from '../components/card-animation/core/constants';
+import { CANVAS_WIDTH_PX, CANVAS_HEIGHT_PX, INITIAL_CARD_COUNT, INITIAL_STACK_OFFSET_RIGHT_PX, INITIAL_STACK_OFFSET_TOP_PX, INITIAL_STACK_DELTA_X_PX, STACK_OVERLAP_RATIO, CANVAS_SCALE, DEAL_DURATION_MS, MOVE_TO_CENTER_DURATION_MS, FLIP_PART_DURATION_MS, INITIAL_ROTATION_DEGREES } from '../components/card-animation/core/constants';
 import { computePlayerLayoutRects } from '../components/card-animation/core/utils';
 
 export const MultiCardDemo = () => {
@@ -35,7 +35,7 @@ export const MultiCardDemo = () => {
             // helpers retained if needed later
 
             const playerIndex = (i % centersWorld.length) + 1; // 1..N
-            const centerXPx = Math.round(canvasPx.width / 2);
+            const centerXPx = (canvasPx.width / 2) * CANVAS_SCALE;
             cards.push({
                 id,
                 suit,
@@ -51,13 +51,14 @@ export const MultiCardDemo = () => {
                     // Make them immediately visible by applying a no-op transition
                     { duration: 1 },
                     // Stagger: wait i * 1000ms before starting motion
-                    { duration: i * 1000, bendAngleDeg: -90 },
+                    { duration: i * 1000, bendAngleDeg: 0 },
+                    { duration: MOVE_TO_CENTER_DURATION_MS / 2, xPx: centerXPx + centerXPx / 2, bendAngleDeg: -90 },
                     // Move horizontally to canvas center (keep Y)
-                    { duration: MOVE_TO_CENTER_DURATION_MS, xPx: centerXPx, yPx: yPx, bendAngleDeg: 0 },
+                    { duration: MOVE_TO_CENTER_DURATION_MS / 2, xPx: centerXPx, bendAngleDeg: 0 },
                     // Flip part 1: lift up and rotate half
-                    { duration: FLIP_PART_DURATION_MS, rotateX: 135, rotateY: 0, rotateZ: 0, yPx: yPx },
+                    { duration: FLIP_PART_DURATION_MS, rotateX: 135, rotateY: 0, rotateZ: 0 },
                     // Flip part 2: come down and finish rotation
-                    { duration: FLIP_PART_DURATION_MS, rotateX: 135 + 180, yPx: yPx },
+                    { duration: FLIP_PART_DURATION_MS, rotateX: 135 + 180 },
                     // Then move to assigned player slot
                     { duration: DEAL_DURATION_MS, dealToPlayer: playerIndex }
                 ],
@@ -71,17 +72,17 @@ export const MultiCardDemo = () => {
     const [visibleCards, setVisibleCards] = useState<CardInitConfig[]>(initialCards);
     useEffect(() => { setVisibleCards(initialCards); }, [initialCards]);
 
-    const scaledW = Math.round(canvasPx.width * CANVAS_SCALE);
-    const scaledH = Math.round(canvasPx.height * CANVAS_SCALE);
+    const scaledW = Math.round(CANVAS_WIDTH_PX * CANVAS_SCALE);
+    const scaledH = Math.round(CANVAS_HEIGHT_PX * CANVAS_SCALE);
     return (
-        <div style={{ position: 'fixed', inset: 0, background: "#1a1a1a url('/images/bg.png') center/contain no-repeat" }}>
+        <div style={{ position: 'relative', width: '100vw', height: '100vh', background: "#1a1a1a url('/images/bg.png') center/cover no-repeat", overflow: 'hidden' }}>
             <div style={{ position: 'absolute', left: '50%', bottom: 0, width: `${scaledW}px`, height: `${scaledH}px`, transform: `translateX(-50%)`, transformOrigin: 'bottom center' }}>
                 <CardsWrapper
                     cards={visibleCards}
                     playerSlotsWorld={centersWorld}
                     stackOverlapRatio={STACK_OVERLAP_RATIO}
                     debugPlayerBounds={playerRectsPx}
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: `${CANVAS_WIDTH_PX}px`, height: `${CANVAS_HEIGHT_PX}px` }}
                 />
                 {/* No gates; all cards present as a stack initially */}
             </div>
