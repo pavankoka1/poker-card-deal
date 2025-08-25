@@ -21,7 +21,9 @@ export const INITIAL_CARD_COUNT = 35;
 export const INITIAL_STACK_OFFSET_RIGHT_PX = 100;
 export const INITIAL_STACK_OFFSET_TOP_PX = 120;
 export const INITIAL_STACK_DELTA_X_PX = 1; // small stagger so they're next to each other
-export const INITIAL_ROTATION_DEGREES: [number, number, number] = [148, 42, -40];
+export const INITIAL_ROTATION_DEGREES: [number, number, number] = [
+  148, 42, -40,
+];
 export const DEAL_DELAY_PER_CARD_MS = 1000;
 
 // Animation timings
@@ -32,4 +34,3 @@ export const FLIP_Y_PEAK_PX = 48;
 
 // Scaling
 export const CANVAS_SCALE = 2;
-
