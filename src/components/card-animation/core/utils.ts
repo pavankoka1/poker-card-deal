@@ -1,4 +1,4 @@
-import { PLAYER_COUNT, PLAYER_GAP_X_PX, PLAYER_LIFT_Y_PER_STEP_PX, PLAYER_OFFSET_BOTTOM_PX, PLAYER_PADDING_LEFT_PX, PLAYER_PADDING_RIGHT_PX, CANVAS_SCALE } from "./constants";
+import { PLAYER_COUNT, PLAYER_GAP_X_PX, PLAYER_LIFT_Y_PER_STEP_PX, PLAYER_OFFSET_BOTTOM_PX, PLAYER_PADDING_LEFT_PX, PLAYER_PADDING_RIGHT_PX } from "./constants";
 
 export function computePlayerLayoutRects(canvas: { width: number; height: number }) {
     const usableWidth = canvas.width - PLAYER_PADDING_LEFT_PX - PLAYER_PADDING_RIGHT_PX;

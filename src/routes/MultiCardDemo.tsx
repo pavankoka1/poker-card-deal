@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CardInitConfig, CardsWrapper } from '../components/card-animation';
 import {
     CANVAS_HEIGHT_PX,
-    CANVAS_SCALE,
     CANVAS_WIDTH_PX,
     DEAL_DURATION_MS,
     FLIP_PART_DURATION_MS,
@@ -15,9 +14,6 @@ import {
     STACK_OVERLAP_RATIO,
 } from '../components/card-animation/core/constants';
 import { computePlayerLayoutRects } from '../components/card-animation/core/utils';
-import { NavigationControls } from '../components/NavigationControls';
-import { NavigationTest } from '../components/NavigationTest';
-import { useNavigation } from '../hooks/useNavigation';
 import { useResponsiveScaling } from '../hooks/useResponsiveScaling';
 
 export const MultiCardDemo = () => {
@@ -26,8 +22,7 @@ export const MultiCardDemo = () => {
     const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
     // Custom hooks
-    const { position: cardsWrapperPosition, navigateLeft, navigateRight, resetPosition } = useNavigation();
-    const { cardsParentLayout, scaledCardsW, scaledCardsH } = useResponsiveScaling(windowW);
+    const { scale, translateX, translateY, originalWidth, originalHeight } = useResponsiveScaling(windowW);
 
     // Debounced resize handler
     const handleResize = useCallback(() => {
@@ -97,7 +92,7 @@ export const MultiCardDemo = () => {
             const wy = -((yPx / canvasPx.height - 0.5) * worldFactor);
 
             const playerIndex = (i % centersWorld.length) + 1; // 1..N
-            const centerXPx = (canvasPx.width / 2) * CANVAS_SCALE;
+            const centerXPx = (canvasPx.width / 2) * 2;
             cards.push({
                 id,
                 suit,
@@ -141,23 +136,14 @@ export const MultiCardDemo = () => {
         setVisibleCards(initialCards);
     }, [initialCards]);
 
-    // Check if navigation buttons are needed
-    const needsNavigation = scaledCardsW > windowW * 0.9;
-
-    // Calculate final transform values to avoid multiple translate issues
-    const finalTransformX = -50 + cardsWrapperPosition.x / (scaledCardsW / 100);
-    const finalTransformY = -50 + cardsWrapperPosition.y / (scaledCardsH / 100);
-
     // Debug: Log current state
     console.log('Current state:', {
         windowW,
-        scaledCardsW,
-        scaledCardsH,
-        cardsWrapperPosition,
-        finalTransformX,
-        finalTransformY,
-        needsNavigation,
-        cardsParentLayout,
+        scale,
+        translateX,
+        translateY,
+        originalWidth,
+        originalHeight,
     });
 
     return (
@@ -170,51 +156,31 @@ export const MultiCardDemo = () => {
                 overflow: 'hidden',
             }}
         >
-            {/* Debug Navigation Test */}
-            <NavigationTest
-                position={cardsWrapperPosition}
-                navigateLeft={navigateLeft}
-                navigateRight={navigateRight}
-                resetPosition={resetPosition}
-            />
             {/* Absolutely positioned casino table image for background */}
             <img
                 src="/images/bg.png"
                 alt="Casino Table"
                 style={{
                     position: 'absolute',
-                    left: '50%',
-                    top: '50%',
-                    width: `${scaledCardsW}px`, // Sync with CardsWrapper container
-                    height: `${scaledCardsH}px`, // Sync with CardsWrapper container
-                    transform: `scale(${cardsParentLayout.scale}) translate(${finalTransformX}%, ${finalTransformY}%)`,
+                    width: `${originalWidth}px`,
+                    height: `${originalHeight}px`,
+                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
                     transformOrigin: 'top left',
                     zIndex: 0,
-                    transition: 'transform 0.3s cubic-bezier(.56,.04,.69,.83)',
                     pointerEvents: 'none',
                 }}
             />
 
-            {/* Navigation Controls */}
-            <NavigationControls
-                onNavigateLeft={navigateLeft}
-                onNavigateRight={navigateRight}
-                needsNavigation={needsNavigation}
-            />
-
-            {/* Cards & player bets wrapper - now responsive and navigable */}
+            {/* Cards & player bets wrapper - now responsive and centered */}
             <div
                 ref={cardsWrapperRef}
                 style={{
                     position: 'absolute',
-                    left: '50%',
-                    top: '50%',
-                    width: `${scaledCardsW}px`,
-                    height: `${scaledCardsH}px`,
-                    transform: `scale(${cardsParentLayout.scale}) translate(${finalTransformX}%, ${finalTransformY}%)`,
+                    width: `${originalWidth}px`,
+                    height: `${originalHeight}px`,
+                    transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
                     transformOrigin: 'top left',
                     zIndex: 1,
-                    transition: 'transform 0.3s cubic-bezier(.56,.04,.69,.83)',
                     overflow: 'visible',
                 }}
             >

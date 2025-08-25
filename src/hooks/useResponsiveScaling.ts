@@ -1,42 +1,23 @@
-import { useMemo } from 'react';
-
-export interface LayoutConfig {
-  minWidth: number;
-  scale: number;
-  left: number;
-  top: number;
-}
-
-const CARDSWRAPPER_CONFIGS: LayoutConfig[] = [
-  { minWidth: 0, scale: 0.8, left: 20, top: 30 },
-  { minWidth: 800, scale: 1, left: 60, top: 80 },
-  { minWidth: 1200, scale: 1.2, left: 100, top: 120 },
-];
-
-function getResponsiveConfig(
-  configs: LayoutConfig[],
-  width: number
-): LayoutConfig {
-  return (
-    configs
-      .filter((bp: LayoutConfig) => width >= bp.minWidth)
-      .sort((a: LayoutConfig, b: LayoutConfig) => b.minWidth - a.minWidth)[0] ||
-    configs[0]
-  );
-}
-
 export const useResponsiveScaling = (windowWidth: number) => {
-  const cardsParentLayout = useMemo(
-    () => getResponsiveConfig(CARDSWRAPPER_CONFIGS, windowWidth),
-    [windowWidth]
-  );
+    // Keep original dimensions constant for animations
+    const originalWidth = 1440;
+    const originalHeight = 600;
 
-  const scaledCardsW = 1440; // CANVAS_WIDTH_PX * 2
-  const scaledCardsH = 600;  // CANVAS_HEIGHT_PX * 2
+    // Calculate scale to fit window width without overflow
+    const maxWidth = windowWidth;
+    const scale = maxWidth / originalWidth;
 
-  return {
-    cardsParentLayout,
-    scaledCardsW,
-    scaledCardsH,
-  };
+    // Calculate translation to center the scaled content
+    const scaledWidth = originalWidth * scale;
+    const scaledHeight = originalHeight * scale;
+    const translateX = (windowWidth - scaledWidth) / 2;
+    const translateY = (window.innerHeight - scaledHeight) / 2;
+
+    return {
+        scale,
+        translateX,
+        translateY,
+        originalWidth,
+        originalHeight,
+    };
 };
