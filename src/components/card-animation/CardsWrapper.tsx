@@ -1,4 +1,10 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 import {
   CardInitConfig,
   MultiCardRenderer,
@@ -28,6 +34,7 @@ export interface CardsWrapperHandle {
   ) => void;
   enqueueTransition: (cardId: string, transition: TransitionSpec) => void;
   setTransitions: (cardId: string, transitions: TransitionSpec[]) => void;
+  resize: (dimensions: { width: number; height: number }) => void;
 }
 
 export const CardsWrapper = forwardRef<CardsWrapperHandle, CardsWrapperProps>(
@@ -45,20 +52,31 @@ export const CardsWrapper = forwardRef<CardsWrapperHandle, CardsWrapperProps>(
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rendererRef = useRef<MultiCardRenderer | null>(null);
     const addedIdsRef = useRef<Set<string>>(new Set());
+    const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        addCard: (config) => rendererRef.current?.addCard(config),
-        updateCard: (cardId, partial) =>
-          rendererRef.current?.updateCard(cardId, partial),
-        enqueueTransition: (cardId, transition) =>
-          rendererRef.current?.enqueueTransition(cardId, transition),
-        setTransitions: (cardId, transitions) =>
-          rendererRef.current?.setTransitions(cardId, transitions),
-      }),
-      []
-    );
+    // Debounced resize handler
+    const handleResize = useCallback(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const displayWidth = Math.floor(canvas.clientWidth);
+      const displayHeight = Math.floor(canvas.clientHeight);
+      const ratio = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+      const targetWidth = displayWidth * ratio;
+      const targetHeight = displayHeight * ratio;
+
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
+
+      if (rendererRef.current) {
+        rendererRef.current.resize({
+          width: displayWidth,
+          height: displayHeight,
+        });
+      }
+    }, []);
 
     // Initialize renderer once
     useEffect(() => {
@@ -76,21 +94,27 @@ export const CardsWrapper = forwardRef<CardsWrapperHandle, CardsWrapperProps>(
       rendererRef.current = renderer;
       renderer.start();
 
-      const resize = () => {
-        const displayWidth = Math.floor(canvas.clientWidth);
-        const displayHeight = Math.floor(canvas.clientHeight);
-        const ratio = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-        const targetWidth = displayWidth * ratio;
-        const targetHeight = displayHeight * ratio;
-        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-          canvas.width = targetWidth;
-          canvas.height = targetHeight;
-        }
-        renderer.resize({ width: displayWidth, height: displayHeight });
-      };
-      const onResize = () => resize();
-      window.addEventListener("resize", onResize);
-      resize();
+      // Use ResizeObserver for more efficient resize detection
+      if (window.ResizeObserver) {
+        resizeObserverRef.current = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.target === canvas) {
+              handleResize();
+            }
+          }
+        });
+
+        resizeObserverRef.current.observe(canvas);
+      } else {
+        // Fallback to window resize event
+        const onResize = () => handleResize();
+        window.addEventListener("resize", onResize);
+
+        return () => {
+          window.removeEventListener("resize", onResize);
+          renderer.stop();
+        };
+      }
 
       // Initialize slots if provided
       if (playerSlotsWorld && playerSlotsWorld.length) {
@@ -104,10 +128,12 @@ export const CardsWrapper = forwardRef<CardsWrapperHandle, CardsWrapperProps>(
       }
 
       return () => {
-        window.removeEventListener("resize", onResize);
+        if (resizeObserverRef.current) {
+          resizeObserverRef.current.disconnect();
+        }
         renderer.stop();
       };
-    }, []);
+    }, [cards, handleResize, playerSlotsWorld, stackOverlapRatio]);
 
     // Apply player slots updates
     useEffect(() => {
@@ -132,13 +158,21 @@ export const CardsWrapper = forwardRef<CardsWrapperHandle, CardsWrapperProps>(
       }
     }, [cards]);
 
-    const scaleVal = scale ?? 1;
-    const containerStyle: React.CSSProperties = {
-      position: "relative",
-      transform: `scale(${scaleVal})`,
-      transformOrigin: "bottom center",
-      ...style,
-    };
+    // Expose imperative API
+    useImperativeHandle(
+      ref,
+      () => ({
+        addCard: (config) => rendererRef.current?.addCard(config),
+        updateCard: (cardId, partial) =>
+          rendererRef.current?.updateCard(cardId, partial),
+        enqueueTransition: (cardId, transition) =>
+          rendererRef.current?.enqueueTransition(cardId, transition),
+        setTransitions: (cardId, transitions) =>
+          rendererRef.current?.setTransitions(cardId, transitions),
+        resize: (dimensions) => rendererRef.current?.resize(dimensions),
+      }),
+      []
+    );
 
     return (
       <>
@@ -151,6 +185,8 @@ export const CardsWrapper = forwardRef<CardsWrapperHandle, CardsWrapperProps>(
             display: "block",
             background: "transparent",
             border: "1px solid #fff",
+            maxWidth: "100%",
+            maxHeight: "100%",
           }}
         />
         {/* {debugPlayerBounds?.map((b, i) => (
